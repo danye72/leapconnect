@@ -584,9 +584,9 @@
         <div class="interval-row">
           <span class="interval-label">Poll interval</span>
           <div class="interval-control">
-            <button class="interval-btn" @click="pendingTransitionPoll = Math.max(5, pendingTransitionPoll - 5)">−</button>
+            <button class="interval-btn" @click="pendingTransitionPoll = Math.max(4, pendingTransitionPoll <= 5 ? pendingTransitionPoll - 1 : pendingTransitionPoll - 5)">−</button>
             <span class="interval-value">{{ pendingTransitionPoll }}s</span>
-            <button class="interval-btn" @click="pendingTransitionPoll = Math.min(300, pendingTransitionPoll + 5)">+</button>
+            <button class="interval-btn" @click="pendingTransitionPoll = Math.min(300, pendingTransitionPoll < 5 ? pendingTransitionPoll + 1 : pendingTransitionPoll + 5)">+</button>
             <button
               class="interval-set-btn"
               :disabled="pendingTransitionPoll === scheduler.transition_poll_interval_seconds || schedulerUpdating"
@@ -669,7 +669,7 @@
         <div class="interval-row">
           <span class="interval-label">Polling interval</span>
           <div class="interval-control">
-            <button class="interval-btn" @click="pendingMqttInterval = Math.max(10, stepDown(pendingMqttInterval))">−</button>
+            <button class="interval-btn" @click="pendingMqttInterval = Math.max(4, stepDown(pendingMqttInterval))">−</button>
             <span class="interval-value">{{ formatSeconds(pendingMqttInterval) }}</span>
             <button class="interval-btn" @click="pendingMqttInterval = Math.min(3600, stepUp(pendingMqttInterval))">+</button>
             <button
@@ -1739,11 +1739,13 @@ function formatSeconds(s) {
 }
 
 function stepUp(val) {
+  if (val < 10) return val + 1
   if (val < 60) return val + 10
   return val + 60
 }
 
 function stepDown(val) {
+  if (val <= 10) return Math.max(4, val - 1)
   if (val <= 60) return val - 10
   return val - 60
 }

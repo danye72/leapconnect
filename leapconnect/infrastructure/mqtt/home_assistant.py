@@ -813,7 +813,6 @@ class HomeAssistantMqttService:
             {
                 "key": "cloud_consumption_kwh_100km",
                 "name": "Consumption (cloud)",
-                "dc": "energy",
                 "unit": "kWh/100km",
                 "icon": "mdi:leaf",
             },
@@ -1247,9 +1246,9 @@ class HomeAssistantMqttService:
             "state_topic": f"{prefix}/{vin}/polling_interval",
             "command_topic": f"{prefix}/{vin}/polling_interval/set",
             "unit_of_measurement": "s",
-            "min": 10,
+            "min": 4,
             "max": 3600,
-            "step": 10,
+            "step": 1,
             "mode": "slider",
             "device": device_info,
             "icon": "mdi:home-clock",
@@ -1298,7 +1297,10 @@ class HomeAssistantMqttService:
 
         for key, value in cloud_stats.items():
             if value is not None:
-                await self._publish(f"{prefix}/cloud_{key}", _str(value), retain=True)
+                val_str = _str(value)
+                if key == "consumption_rank" and isinstance(val_str, str):
+                    val_str = val_str.replace("%", "").strip()
+                await self._publish(f"{prefix}/cloud_{key}", val_str, retain=True)
 
     async def publish_software(self, vehicle: Vehicle, state: dict[str, Any]) -> None:
         """Publish the read-only ``update`` entity for the vehicle software.
