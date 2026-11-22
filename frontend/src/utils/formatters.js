@@ -10,8 +10,8 @@ export function climateMode(val) {
 }
 
 export function gearLabel(val) {
-  const gears = { 0: 'P', 1: 'R', 2: 'N', 3: 'D' }
-  return gears[val] || `Gear ${val}`
+  const gears = { 0: 'Parcheggio', 1: 'Retromarcia', 2: 'Folle', 3: 'Marcia' }
+  return gears[val] || (val === 'P' ? 'Parcheggio' : val === 'D' ? 'Marcia' : val === 'R' ? 'Retromarcia' : val === 'N' ? 'Folle' : `Gear ${val}`)
 }
 
 export function formatTime(isoStr) {

@@ -726,7 +726,12 @@ class HomeAssistantMqttService:
                 "unit": "km/h",
                 "icon": "mdi:speedometer",
             },
-            {"key": "gear_status", "name": "Gear", "icon": "mdi:car-shift-pattern"},
+            {
+                "key": "gear_status",
+                "name": "Gear",
+                "icon": "mdi:car-shift-pattern",
+                "value_template": "{% set m = {'P': 'Parcheggio', '0': 'Parcheggio', 'PARK': 'Parcheggio', 'D': 'Marcia', '3': 'Marcia', 'DRIVE': 'Marcia', 'R': 'Retromarcia', '1': 'Retromarcia', 'REVERSE': 'Retromarcia', 'N': 'Folle', '2': 'Folle', 'NEUTRAL': 'Folle'} %}{{ m.get(value | string, value) }}",
+            },
             # Climate
             {
                 "key": "outdoor_temp",
@@ -877,6 +882,8 @@ class HomeAssistantMqttService:
                 config["unit_of_measurement"] = s["unit"]
             if s.get("dc"):
                 config["device_class"] = s["dc"]
+            if s.get("value_template"):
+                config["value_template"] = s["value_template"]
 
             topic = f"{disc_prefix}/sensor/{device_id}/{s['key']}/config"
             await self._publish_config(topic, config)
