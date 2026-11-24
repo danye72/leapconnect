@@ -450,8 +450,8 @@ class AppContainer:
                 vin, s.interval_minutes, s.mqtt_interval_seconds
             )
 
-    async def handle_mqtt_settings(self, key: str, value: int) -> None:
-        """Handle a polling-interval/limit change received from HA via MQTT."""
+    async def handle_mqtt_settings(self, vin: str, key: str, value: int) -> None:
+        """Handle a polling-interval/limit/window change received from HA via MQTT."""
         if not self.scheduler or not self.repo:
             _LOGGER.warning("MQTT settings change ignored: scheduler not available")
             return
@@ -471,24 +471,39 @@ class AppContainer:
             if not self.client:
                 _LOGGER.warning("MQTT charge_limit change ignored: no API client")
                 return
-            for v in self.vehicles:
+            target_vins = [vin] if vin else [v.vin for v in self.vehicles]
+            for target_vin in target_vins:
                 try:
-                    await self.client.set_charge_limit(v.vin, value)
-                    _LOGGER.info("Charge limit set to %d%% for %s", value, v.vin)
+                    await self.client.set_charge_limit(target_vin, value)
+                    _LOGGER.info("Charge limit set to %d%% for %s", value, target_vin)
                 except Exception as exc:
                     _LOGGER.exception(
-                        "Failed to set charge limit for %s: %s", v.vin, exc
+                        "Failed to set charge limit for %s: %s", target_vin, exc
+                    )
+        elif key == "windows_position":
+            if not self.client:
+                _LOGGER.warning("MQTT windows_position change ignored: no API client")
+                return
+            target_vins = [vin] if vin else [v.vin for v in self.vehicles]
+            for target_vin in target_vins:
+                try:
+                    await self.client.windows(target_vin, value=str(value))
+                    _LOGGER.info("Windows position set to %d%% for %s", value, target_vin)
+                except Exception as exc:
+                    _LOGGER.exception(
+                        "Failed to set windows position for %s: %s", target_vin, exc
                     )
         elif key == "ac_temperature":
             if not self.client:
                 _LOGGER.warning("MQTT ac_temperature change ignored: no API client")
                 return
-            for v in self.vehicles:
+            target_vins = [vin] if vin else [v.vin for v in self.vehicles]
+            for target_vin in target_vins:
                 try:
-                    await self.client.ac_on(v.vin, params={"temperature": str(value)})
-                    _LOGGER.info("AC temperature set to %d°C for %s", value, v.vin)
+                    await self.client.ac_on(target_vin, params={"temperature": str(value)})
+                    _LOGGER.info("AC temperature set to %d°C for %s", value, target_vin)
                 except Exception as exc:
-                    _LOGGER.exception("Failed to set AC temp for %s: %s", v.vin, exc)
+                    _LOGGER.exception("Failed to set AC temp for %s: %s", target_vin, exc)
         else:
             _LOGGER.warning("MQTT: unknown setting key '%s'", key)
 

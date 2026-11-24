@@ -1247,6 +1247,24 @@ class HomeAssistantMqttService:
             }
             topic = f"{disc_prefix}/number/{device_id}/charge_limit/config"
             await self._publish_config(topic, charge_limit_config)
+
+        # ── Windows position entity ────────────────────────────────────
+        if self._has_right(vehicle, 230):
+            windows_pos_config = {
+                "name": "Windows Position",
+                "unique_id": f"{device_id}_windows_position",
+                "state_topic": f"{prefix}/{vin}/window_fl",
+                "command_topic": f"{prefix}/{vin}/windows_position/set",
+                "unit_of_measurement": "%",
+                "min": 0,
+                "max": 100,
+                "step": 10,
+                "mode": "slider",
+                "device": device_info,
+                "icon": "mdi:car-door",
+            }
+            topic = f"{disc_prefix}/number/{device_id}/windows_position/config"
+            await self._publish_config(topic, windows_pos_config)
         ha_poll_config = {
             "name": "Polling Interval",
             "unique_id": f"{device_id}_polling_interval",
@@ -1502,6 +1520,7 @@ class HomeAssistantMqttService:
                                     "polling_interval",
                                     "charge_limit",
                                     "ac_temperature",
+                                    "windows_position",
                                 ):
                                     try:
                                         value = int(float(payload_str))
@@ -1510,7 +1529,7 @@ class HomeAssistantMqttService:
                                         )
                                         if self._settings_callback:
                                             spawn(
-                                                self._handle_settings_safe(key, value)
+                                                self._handle_settings_safe(vin, key, value)
                                             )
                                     except (ValueError, TypeError):
                                         _LOGGER.warning(
@@ -1551,8 +1570,8 @@ class HomeAssistantMqttService:
     def set_settings_callback(self, callback) -> None:
         """Set callback for handling interval changes from HA.
 
-        Callback signature: async def cb(key: str, value: int) -> None
-        key is 'polling_interval'.
+        Callback signature: async def cb(vin: str, key: str, value: int) -> None
+        key is 'polling_interval', 'charge_limit', 'ac_temperature', or 'windows_position'.
         """
         self._settings_callback = callback
 
@@ -1564,10 +1583,10 @@ class HomeAssistantMqttService:
         except Exception as exc:
             _LOGGER.exception("MQTT command handler error: %s", exc)
 
-    async def _handle_settings_safe(self, key: str, value: int) -> None:
+    async def _handle_settings_safe(self, vin: str, key: str, value: int) -> None:
         """Execute settings callback safely."""
         try:
             if self._settings_callback:
-                await self._settings_callback(key, value)
+                await self._settings_callback(vin, key, value)
         except Exception as exc:
             _LOGGER.exception("MQTT settings handler error: %s", exc)
