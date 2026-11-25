@@ -412,8 +412,11 @@ class HomeAssistantMqttService:
         self, prefix: str, status: VehicleStatus, current_zone: str | None = None
     ) -> None:
         """Publish individual sensor topics for HA entities."""
-        _str = lambda v: str(v) if v is not None else ""  # noqa: E731
         _bool = lambda v: "ON" if v else "OFF"  # noqa: E731
+
+        async def _pub_val(subtopic: str, val: Any) -> None:
+            if val is not None:
+                await self._publish(f"{prefix}/{subtopic}", str(val), retain=True)
 
         await self._publish(
             f"{prefix}/current_zone", current_zone or "Away", retain=True
@@ -422,98 +425,50 @@ class HomeAssistantMqttService:
         # -- Numeric sensors --
         if status.battery:
             b = status.battery
-            await self._publish(f"{prefix}/battery_soc", _str(b.soc), retain=True)
-            await self._publish(
-                f"{prefix}/range", _str(b.expected_mileage), retain=True
-            )
-            await self._publish(
-                f"{prefix}/battery_voltage", _str(b.battery_voltage), retain=True
-            )
-            await self._publish(
-                f"{prefix}/battery_current", _str(b.battery_current), retain=True
-            )
-            await self._publish(
-                f"{prefix}/battery_power", _str(b.battery_power), retain=True
-            )
-            await self._publish(
-                f"{prefix}/charging_power", _str(b.charging_power_kw), retain=True
-            )
-            await self._publish(
-                f"{prefix}/discharging_power", _str(b.discharging_power_kw), retain=True
-            )
-            await self._publish(
-                f"{prefix}/dump_energy_kwh", _str(b.dump_energy_kwh), retain=True
-            )
-            await self._publish(
-                f"{prefix}/charge_remain_time", _str(b.charge_remain_time), retain=True
-            )
-            await self._publish(
-                f"{prefix}/charge_soc_setting",
-                _str(b.charge_plan.soc_setting),
-                retain=True,
-            )
+            await _pub_val("battery_soc", b.soc)
+            await _pub_val("range", b.expected_mileage)
+            await _pub_val("battery_voltage", b.battery_voltage)
+            await _pub_val("battery_current", b.battery_current)
+            await _pub_val("battery_power", b.battery_power)
+            await _pub_val("charging_power", b.charging_power_kw)
+            await _pub_val("discharging_power", b.discharging_power_kw)
+            await _pub_val("dump_energy_kwh", b.dump_energy_kwh)
+            await _pub_val("charge_remain_time", b.charge_remain_time)
+            await _pub_val("charge_soc_setting", b.charge_plan.soc_setting)
 
         if status.driving:
-            await self._publish(
-                f"{prefix}/odometer", _str(status.driving.total_mileage), retain=True
-            )
-            await self._publish(
-                f"{prefix}/speed", _str(status.driving.speed), retain=True
-            )
-            await self._publish(
-                f"{prefix}/gear_status",
-                _str(
+            await _pub_val("odometer", status.driving.total_mileage)
+            await _pub_val("speed", status.driving.speed)
+            if status.driving.gear_status is not None:
+                gear_raw = (
                     status.driving.gear_status.value
                     if hasattr(status.driving.gear_status, "value")
                     else status.driving.gear_status
                 )
-                if status.driving.gear_status is not None
-                else "",
-                retain=True,
-            )
+                await _pub_val("gear_status", gear_raw)
 
         if status.climate:
             c = status.climate
-            await self._publish(
-                f"{prefix}/outdoor_temp", _str(c.outdoor_temp), retain=True
-            )
-            await self._publish(f"{prefix}/ac_setting", _str(c.ac_setting), retain=True)
-            await self._publish(
-                f"{prefix}/ac_air_volume", _str(c.ac_air_volume), retain=True
-            )
+            await _pub_val("outdoor_temp", c.outdoor_temp)
+            await _pub_val("ac_setting", c.ac_setting)
+            await _pub_val("ac_air_volume", c.ac_air_volume)
 
         # Tires (bar)
         if status.tires:
             t = status.tires
-            await self._publish(
-                f"{prefix}/tire_fl_bar", _str(t.front_left_bar), retain=True
-            )
-            await self._publish(
-                f"{prefix}/tire_fr_bar", _str(t.front_right_bar), retain=True
-            )
-            await self._publish(
-                f"{prefix}/tire_rl_bar", _str(t.rear_left_bar), retain=True
-            )
-            await self._publish(
-                f"{prefix}/tire_rr_bar", _str(t.rear_right_bar), retain=True
-            )
+            await _pub_val("tire_fl_bar", t.front_left_bar)
+            await _pub_val("tire_fr_bar", t.front_right_bar)
+            await _pub_val("tire_rl_bar", t.rear_left_bar)
+            await _pub_val("tire_rr_bar", t.rear_right_bar)
 
         # Windows (percent)
         if status.windows:
             w = status.windows
-            await self._publish(
-                f"{prefix}/window_fl", _str(w.left_front_window_percent), retain=True
-            )
-            await self._publish(
-                f"{prefix}/window_fr", _str(w.right_front_window_percent), retain=True
-            )
-            await self._publish(
-                f"{prefix}/window_rl", _str(w.left_rear_window_percent), retain=True
-            )
-            await self._publish(
-                f"{prefix}/window_rr", _str(w.right_rear_window_percent), retain=True
-            )
-            await self._publish(f"{prefix}/sun_shade", _str(w.sun_shade), retain=True)
+            await _pub_val("window_fl", w.left_front_window_percent)
+            await _pub_val("window_fr", w.right_front_window_percent)
+            await _pub_val("window_rl", w.left_rear_window_percent)
+            await _pub_val("window_rr", w.right_rear_window_percent)
+            await _pub_val("sun_shade", w.sun_shade)
 
         # -- Binary sensors --
         await self._publish(
@@ -730,7 +685,13 @@ class HomeAssistantMqttService:
                 "key": "gear_status",
                 "name": "Gear",
                 "icon": "mdi:car-shift-pattern",
-                "value_template": "{% set m = {'P': 'Parcheggio', '0': 'Parcheggio', 'PARK': 'Parcheggio', 'D': 'Marcia', '3': 'Marcia', 'DRIVE': 'Marcia', 'R': 'Retromarcia', '1': 'Retromarcia', 'REVERSE': 'Retromarcia', 'N': 'Folle', '2': 'Folle', 'NEUTRAL': 'Folle'} %}{{ m.get(value | string, value) }}",
+                "value_template": (
+                    "{% set m = {'P': 'Parcheggio', '0': 'Parcheggio', "
+                    "'PARK': 'Parcheggio', 'D': 'Marcia', '3': 'Marcia', "
+                    "'DRIVE': 'Marcia', 'R': 'Retromarcia', '1': 'Retromarcia', "
+                    "'REVERSE': 'Retromarcia', 'N': 'Folle', '2': 'Folle', "
+                    "'NEUTRAL': 'Folle'} %}{{ m.get(value | string, value) }}"
+                ),
             },
             # Climate
             {
@@ -1529,7 +1490,9 @@ class HomeAssistantMqttService:
                                         )
                                         if self._settings_callback:
                                             spawn(
-                                                self._handle_settings_safe(vin, key, value)
+                                                self._handle_settings_safe(
+                                                    vin, key, value
+                                                )
                                             )
                                     except (ValueError, TypeError):
                                         _LOGGER.warning(
@@ -1571,7 +1534,8 @@ class HomeAssistantMqttService:
         """Set callback for handling interval changes from HA.
 
         Callback signature: async def cb(vin: str, key: str, value: int) -> None
-        key is 'polling_interval', 'charge_limit', 'ac_temperature', or 'windows_position'.
+        key is 'polling_interval', 'charge_limit', 'ac_temperature', or
+        'windows_position'.
         """
         self._settings_callback = callback
 

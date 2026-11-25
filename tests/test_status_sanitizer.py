@@ -14,10 +14,24 @@ from leapconnect.application.vehicle_cache import VehicleStatusCache
 
 
 def _status(
-    *, mileage=3105, soc=80, precise_soc=80.4, energy=40000, lat=41.27, lng=15.94
+    *,
+    mileage=3105,
+    soc=80,
+    precise_soc=80.4,
+    energy=40000,
+    expected_mileage=None,
+    voltage=None,
+    lat=41.27,
+    lng=15.94,
 ):
     return VehicleStatus(
-        battery=BatteryStatus(soc=soc, precise_soc=precise_soc, dump_energy=energy),
+        battery=BatteryStatus(
+            soc=soc,
+            precise_soc=precise_soc,
+            dump_energy=energy,
+            expected_mileage=expected_mileage,
+            battery_voltage=voltage,
+        ),
         driving=DrivingStatus(speed=0, total_mileage=mileage),
         location=LocationStatus(latitude=lat, longitude=lng),
     )
@@ -46,11 +60,24 @@ def test_partial_payload_becomes_unknown():
 
 
 def test_zero_soc_with_valid_odometer_is_kept():
-    # A genuinely empty battery: the odometer is valid, so 0% is a real reading.
-    status = sanitize_vehicle_status(_status(soc=0, precise_soc=0))
+    # A genuinely empty battery: odometer valid and no remaining energy/range/voltage.
+    status = sanitize_vehicle_status(
+        _status(soc=0, precise_soc=0, energy=0, expected_mileage=0, voltage=315.0)
+    )
 
     assert status.battery.soc == 0
     assert status.battery.precise_soc == 0
+
+
+def test_wakeup_zero_soc_with_charge_evidence_is_dropped():
+    # T03 BMS wake-up: odometer, range and pack voltage are valid, soc briefly 0.
+    status = sanitize_vehicle_status(
+        _status(soc=0, precise_soc=0, energy=0, expected_mileage=212, voltage=372.2)
+    )
+
+    assert status.driving.total_mileage == 3105
+    assert status.battery.soc is None
+    assert status.battery.precise_soc is None
 
 
 def test_single_zero_coordinate_is_kept():

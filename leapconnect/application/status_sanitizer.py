@@ -36,6 +36,21 @@ def sanitize_vehicle_status(status: VehicleStatus) -> VehicleStatus:
             battery.precise_soc = None
         _LOGGER.debug("Partial vehicle status payload, zeroed readings dropped")
 
+    # On wake-up (e.g. T03 BMS contactor closing), the API can report soc=0
+    # for a single cycle while cached odometer, range, energy or pack voltage
+    # clearly show a charged battery.
+    has_charge_evidence = (
+        (battery.expected_mileage is not None and battery.expected_mileage > 0)
+        or (battery.battery_voltage is not None and battery.battery_voltage > 330)
+        or (battery.dump_energy is not None and battery.dump_energy > 0)
+    )
+    if has_charge_evidence:
+        if battery.soc == 0:
+            battery.soc = None
+            _LOGGER.debug("Transient wake-up soc=0 dropped (battery has charge)")
+        if battery.precise_soc == 0:
+            battery.precise_soc = None
+
     if battery.dump_energy == 0:
         battery.dump_energy = None
 
