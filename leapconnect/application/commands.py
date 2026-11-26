@@ -204,8 +204,30 @@ def _raw(method: str):
     return call
 
 
+async def apply_charge_limit(client, vin: str, limit: int) -> dict:
+    """Set only the target SOC, never arming a delayed-start schedule.
+
+    The cloud stores SOC limit and charge schedule in one plan (cmd 190).
+    ``client.set_charge_limit`` re-sends the stored plan including its
+    ``chargeEnable``/``starttime``, which re-arms a delayed charge. Here the
+    plan is rewritten with ``chargeEnable=0`` (other fields preserved), so an
+    in-progress or immediate charge is not postponed.
+    """
+    schedule = await client.get_charge_schedule(vin) or {}
+    return await client.set_charge_schedule(
+        vin,
+        enabled=False,
+        soc_limit=int(limit),
+        start_time=schedule.get("starttime") or "00:00",
+        end_time=schedule.get("endtime") or "08:00",
+        cycles=schedule.get("cycles") or "1,2,3,4,5,6,7",
+        circulation=schedule.get("circulation", 0),
+        recharge=schedule.get("recharge", 0),
+    )
+
+
 async def _charge_limit(client, vin: str, p: ChargeLimitParams) -> dict:
-    return await client.set_charge_limit(vin, p.limit)
+    return await apply_charge_limit(client, vin, p.limit)
 
 
 async def _seat_heat(client, vin: str, p: SeatLevelParams) -> dict:

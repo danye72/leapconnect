@@ -27,6 +27,7 @@ from leapconnect import config
 from leapconnect.application import settings_store
 from leapconnect.application.battery_health import get_battery_health
 from leapconnect.application.commands import (
+    apply_charge_limit,
     command_allowed,
     execute_mqtt_command,
     execute_vehicle_command,
@@ -474,7 +475,7 @@ class AppContainer:
             target_vins = [vin] if vin else [v.vin for v in self.vehicles]
             for target_vin in target_vins:
                 try:
-                    await self.client.set_charge_limit(target_vin, value)
+                    await apply_charge_limit(self.client, target_vin, value)
                     _LOGGER.info("Charge limit set to %d%% for %s", value, target_vin)
                 except Exception as exc:
                     _LOGGER.exception(

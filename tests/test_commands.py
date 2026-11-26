@@ -47,13 +47,15 @@ class TestRegistryIntegrity:
         params = {} if spec.raw_params else SAMPLE_PARAMS.get(spec.params)
         await spec.invoke(client, "VIN123", params)
         called = [c[0] for c in client.method_calls]
-        assert len(called) == 1, f"{name} called {called}"
-        method = called[0]
-        assert hasattr(AsyncLeapmotorApiClient, method), (
-            f"{name} -> AsyncLeapmotorApiClient.{method} does not exist"
-        )
+        # charge_limit reads the stored plan, then rewrites it (2 calls).
+        expected = 2 if name == "charge_limit" else 1
+        assert len(called) == expected, f"{name} called {called}"
+        for method in called:
+            assert hasattr(AsyncLeapmotorApiClient, method), (
+                f"{name} -> AsyncLeapmotorApiClient.{method} does not exist"
+            )
         # The VIN must always be the first positional argument
-        assert client.method_calls[0][1][0] == "VIN123"
+        assert all(c[1][0] == "VIN123" for c in client.method_calls)
 
     def test_normalize_accepts_kebab_and_legacy_names(self):
         assert normalize_command("trunk-open") == "trunk_open"
@@ -123,12 +125,43 @@ class TestGenericCommandEndpoint:
 
     def test_charge_limit_valid(self, command_client):
         client, stub = command_client
-        stub.set_charge_limit.return_value = {"status": "ok"}
+        stub.get_charge_schedule.return_value = {
+            "chargeEnable": 1,
+            "starttime": "23:30",
+            "endtime": "06:00",
+            "cycles": "1,2,3",
+            "circulation": 1,
+            "recharge": 1,
+        }
+        stub.set_charge_schedule.return_value = {"status": "ok"}
         resp = client.post(
             "/api/vehicles/VIN123/commands/charge-limit", json={"limit": 80}
         )
         assert resp.status_code == 200
-        stub.set_charge_limit.assert_awaited_once_with("VIN123", 80)
+        # Delayed start must NOT be re-armed; other plan fields are preserved.
+        stub.set_charge_schedule.assert_awaited_once_with(
+            "VIN123",
+            enabled=False,
+            soc_limit=80,
+            start_time="23:30",
+            end_time="06:00",
+            cycles="1,2,3",
+            circulation=1,
+            recharge=1,
+        )
+        stub.set_charge_limit.assert_not_awaited()
+
+    def test_charge_limit_without_existing_schedule(self, command_client):
+        client, stub = command_client
+        stub.get_charge_schedule.return_value = {}
+        stub.set_charge_schedule.return_value = {"status": "ok"}
+        resp = client.post(
+            "/api/vehicles/VIN123/commands/charge-limit", json={"limit": 90}
+        )
+        assert resp.status_code == 200
+        kwargs = stub.set_charge_schedule.await_args.kwargs
+        assert kwargs["enabled"] is False
+        assert kwargs["soc_limit"] == 90
 
     def test_charge_limit_out_of_range_422(self, command_client):
         client, stub = command_client
@@ -136,7 +169,7 @@ class TestGenericCommandEndpoint:
             "/api/vehicles/VIN123/commands/charge-limit", json={"limit": 10}
         )
         assert resp.status_code == 422
-        stub.set_charge_limit.assert_not_awaited()
+        stub.set_charge_schedule.assert_not_awaited()
 
     def test_climate_params_filtered(self, command_client):
         client, stub = command_client
